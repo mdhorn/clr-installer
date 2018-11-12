@@ -56,6 +56,7 @@ func Install(rootDir string, model *model.SystemInstall, options args.Args) erro
 	var version string
 	var versionBuf []byte
 	var prg progress.Progress
+	var encryptedUsed bool
 
 	vars := map[string]string{
 		"chrootDir": rootDir,
@@ -204,6 +205,18 @@ func Install(rootDir string, model *model.SystemInstall, options args.Args) erro
 
 		// prepare the blockdevice's partitions filesystem
 		for _, ch := range curr.Children {
+			// Handle Encrypted partitions
+			if ch.Type == storage.BlockDeviceTypeCrypt {
+				encryptedUsed = true
+				msg := fmt.Sprintf("Mapping %s partition to an encrypted partition", ch.Name)
+				prg = progress.NewLoop(msg)
+				log.Info(msg)
+				if err = ch.MapEncrypted(); err != nil {
+					return err
+				}
+				prg.Success()
+			}
+
 			msg := fmt.Sprintf("Writing %s file system to %s", ch.FsType, ch.Name)
 			prg = progress.NewLoop(msg)
 			log.Info(msg)
@@ -268,6 +281,10 @@ func Install(rootDir string, model *model.SystemInstall, options args.Args) erro
 
 	if model.Language.Code != language.DefaultLanguage {
 		model.AddBundle(language.RequiredBundle)
+	}
+
+	if encryptedUsed {
+		model.AddBundle(storage.RequiredBundle)
 	}
 
 	if model.KernelArguments != nil && len(model.KernelArguments.Add) > 0 {

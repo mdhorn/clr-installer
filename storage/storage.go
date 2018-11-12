@@ -82,6 +82,9 @@ const (
 	// BlockDeviceTypeLVM2Volume identifies a BlockDevice as a lvm2 volume
 	BlockDeviceTypeLVM2Volume
 
+	// BlockDeviceTypeCrypt identifies a BlockDevice as an encrypted partition (created with cryptsetup)
+	BlockDeviceTypeCrypt
+
 	// BlockDeviceTypeLoop identifies a BlockDevice as a loop device (created with losetup)
 	BlockDeviceTypeLoop
 
@@ -99,6 +102,9 @@ const (
 
 	// MinimumPartitionSize is smallest size for any partition
 	MinimumPartitionSize = 1048576
+
+	// RequiredBundle the bundle needed if encrypted partitions are used
+	RequiredBundle = "bootloader-extras"
 )
 
 var (
@@ -114,6 +120,7 @@ var (
 	blockDeviceTypeMap = map[BlockDeviceType]string{
 		BlockDeviceTypeDisk:       "disk",
 		BlockDeviceTypePart:       "part",
+		BlockDeviceTypeCrypt:      "crypt",
 		BlockDeviceTypeLoop:       "loop",
 		BlockDeviceTypeRom:        "rom",
 		BlockDeviceTypeLVM2Group:  "LVM2_member",
@@ -154,6 +161,11 @@ func (bd *BlockDevice) ExpandName(alias map[string]string) {
 
 // GetDeviceFile formats the block device's file path
 func (bd BlockDevice) GetDeviceFile() string {
+
+	if bd.Type == BlockDeviceTypeCrypt {
+		return filepath.Join("/dev/", bd.Name)
+	}
+
 	return filepath.Join("/dev/", bd.Name)
 }
 
