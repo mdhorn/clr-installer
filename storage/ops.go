@@ -66,7 +66,7 @@ func makeFs(bd *BlockDevice, args []string) error {
 		args = append(args, strings.Split(bd.options, " ")...)
 	}
 
-	args = append(args, bd.GetDeviceFile())
+	args = append(args, bd.GetMappedDeviceFile())
 
 	err := cmd.RunAndLog(args...)
 	if err != nil {
@@ -105,7 +105,7 @@ func (bd *BlockDevice) Mount(root string) error {
 
 	targetPath := filepath.Join(root, bd.MountPoint)
 
-	return mountFs(bd.GetDeviceFile(), targetPath, bd.FsType, syscall.MS_RELATIME)
+	return mountFs(bd.GetMappedDeviceFile(), targetPath, bd.FsType, syscall.MS_RELATIME)
 }
 
 // UmountAll unmounts all previously mounted devices
@@ -412,79 +412,4 @@ func DetachLoopDevice(file string) {
 	}
 
 	_ = cmd.RunAndLog(args...)
-}
-
-// MapEncrypted uses cryptsetup to format (initialize) and open (map) the
-// physical partion to an encrypted partition
-func (bd *BlockDevice) MapEncrypted() error {
-	if bd.Type != BlockDeviceTypeCrypt {
-		return errors.Errorf("Trying to run cryptsetup() against a non crypt partition")
-	}
-
-	passphrase := "P@ssW0rd"
-
-	args := []string{
-		"cryptsetup",
-		"--batch-mode",
-		"--hash=sha256",
-		"--cipher=aes-xts-plain64",
-		"--key-size=512",
-		"luksFormat",
-	}
-
-	args = append(args, bd.GetDeviceFile(), "-")
-
-	if err := cmd.PipeRunAndLog(passphrase, args...); err != nil {
-		return errors.Wrap(err)
-	}
-
-	var mapped string
-
-	// Special case for mapping 'root'
-	if bd.MountPoint == "/" {
-		mapped = "root"
-	} else {
-		// make the mapped device all lower case
-		// drop the leading '/'
-		mapped = strings.TrimPrefix(strings.ToLower(bd.MountPoint), "/")
-		// replace '/' with '_'
-		mapped = strings.Replace(mapped, "/", "_", -1)
-	}
-
-	args = []string{
-		"cryptsetup",
-		"--batch-mode",
-		"luksOpen",
-	}
-
-	args = append(args, bd.GetDeviceFile(), mapped, "-")
-
-	if err := cmd.PipeRunAndLog(passphrase, args...); err != nil {
-		return errors.Wrap(err)
-	}
-
-	log.Debug("Disk partition %q is mapped to encrypted partition %q", bd.Name, mapped)
-
-	// Store the mapped point for later unmounting
-	mountedEncrypts = append(mountedEncrypts, mapped)
-
-	bd.Name = filepath.Join("mapper", mapped)
-
-	return nil
-}
-
-// umMapEncrypted uses cryptsetup to close (unmap) an encrypted partition
-func unMapEncrypted(mapped string) error {
-	args := []string{
-		"cryptsetup",
-		"--batch-mode",
-		"luksClose",
-		mapped,
-	}
-
-	if err := cmd.RunAndLog(args...); err != nil {
-		return errors.Wrap(err)
-	}
-
-	return nil
 }

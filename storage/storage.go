@@ -24,6 +24,7 @@ import (
 // A BlockDevice describes a block device and its partitions
 type BlockDevice struct {
 	Name            string           // device name
+	MappedName      string           // mapped device name
 	Model           string           // device model
 	MajorMinor      string           // major:minor device number
 	FsType          string           // filesystem type
@@ -102,9 +103,6 @@ const (
 
 	// MinimumPartitionSize is smallest size for any partition
 	MinimumPartitionSize = 1048576
-
-	// RequiredBundle the bundle needed if encrypted partitions are used
-	RequiredBundle = "bootloader-extras"
 )
 
 var (
@@ -161,9 +159,15 @@ func (bd *BlockDevice) ExpandName(alias map[string]string) {
 
 // GetDeviceFile formats the block device's file path
 func (bd BlockDevice) GetDeviceFile() string {
+	return filepath.Join("/dev/", bd.Name)
+}
 
-	if bd.Type == BlockDeviceTypeCrypt {
-		return filepath.Join("/dev/", bd.Name)
+// GetMappedDeviceFile formats the block device's file path
+// using the mapped device name
+func (bd BlockDevice) GetMappedDeviceFile() string {
+
+	if bd.MappedName != "" {
+		return filepath.Join("/dev/", bd.MappedName)
 	}
 
 	return filepath.Join("/dev/", bd.Name)
@@ -281,9 +285,10 @@ func (bd *BlockDevice) GetConfiguredStatus() ConfigStatus {
 }
 
 // Validate checks if the minimal requirements for a installation is met
-func (bd *BlockDevice) Validate(legacyBios bool) error {
+func (bd *BlockDevice) Validate(legacyBios bool, cryptPass string) error {
 	bootPartition := false
 	rootPartition := false
+	encrypted := false
 
 	for _, ch := range bd.Children {
 		if ch.FsType == "vfat" && ch.MountPoint == "/boot" {
@@ -293,6 +298,10 @@ func (bd *BlockDevice) Validate(legacyBios bool) error {
 		if ch.MountPoint == "/" {
 			rootPartition = true
 		}
+
+		if ch.Type == BlockDeviceTypeCrypt {
+			encrypted = true
+		}
 	}
 
 	if !bootPartition && !legacyBios {
@@ -301,6 +310,10 @@ func (bd *BlockDevice) Validate(legacyBios bool) error {
 
 	if !rootPartition {
 		return errors.Errorf("Could not find a root partition")
+	}
+
+	if encrypted && cryptPass == "" {
+		return errors.Errorf("Encrypted file system enabled, but missing passphase")
 	}
 
 	return nil

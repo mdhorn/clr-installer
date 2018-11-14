@@ -65,6 +65,7 @@ type SystemInstall struct {
 	StorageAlias      []*StorageAlias        `yaml:"block-devices,omitempty,flow"`
 	LegacyBios        bool                   `yaml:"legacyBios,omitempty,flow"`
 	Environment       map[string]string      `yaml:"env,omitempty,flow"`
+	CryptPass         string
 }
 
 // InstallHook is a commands to be executed in a given point of the install process
@@ -170,6 +171,17 @@ func (si *SystemInstall) AddUser(usr *user.User) {
 	si.Users = append(si.Users, usr)
 }
 
+// EncryptionEnabled checks all partition to see if encryption was enabled
+func (si *SystemInstall) EncryptionEnabled() bool {
+	enabled := false
+
+	for _, curr := range si.TargetMedias {
+		enabled = enabled || curr.EncryptionEnabled()
+	}
+
+	return enabled
+}
+
 // Validate checks the model for possible inconsistencies or "minimum required"
 // information
 func (si *SystemInstall) Validate() error {
@@ -183,7 +195,7 @@ func (si *SystemInstall) Validate() error {
 	}
 
 	for _, curr := range si.TargetMedias {
-		if err := curr.Validate(si.LegacyBios); err != nil {
+		if err := curr.Validate(si.LegacyBios, si.CryptPass); err != nil {
 			return err
 		}
 	}

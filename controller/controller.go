@@ -57,6 +57,8 @@ func Install(rootDir string, model *model.SystemInstall, options args.Args) erro
 	var versionBuf []byte
 	var prg progress.Progress
 	var encryptedUsed bool
+	var crypttab []string
+	var fstab []string
 
 	vars := map[string]string{
 		"chrootDir": rootDir,
@@ -70,6 +72,13 @@ func Install(rootDir string, model *model.SystemInstall, options args.Args) erro
 	// for most of the Installation commands
 	if err = utils.VerifyRootUser(); err != nil {
 		return err
+	}
+
+	if model.EncryptionEnabled() && model.CryptPass == "" {
+		model.CryptPass = storage.AskPassPhrase()
+		if model.CryptPass == "" {
+			return errors.Errorf("Can not create encrypted file system, no passphrase")
+		}
 	}
 
 	if !options.StubImage {
@@ -206,15 +215,29 @@ func Install(rootDir string, model *model.SystemInstall, options args.Args) erro
 		// prepare the blockdevice's partitions filesystem
 		for _, ch := range curr.Children {
 			// Handle Encrypted partitions
+			var ctab []string
+			var ftab []string
+
 			if ch.Type == storage.BlockDeviceTypeCrypt {
 				encryptedUsed = true
+
+				if ch.FsType == "swap" {
+					ctab = append(ctab, "cryptswap", "UUID="+ch.UUID, "/dev/urandom",
+						"swap,offset=1024,cipher=aes-xts-plain64,size=512")
+					ftab = append(ftab, "/dev/mapper/cryptswap", "none",
+						"swap", "defaults", "0", "0")
+				} else {
+					ctab = append(ctab, "#", "luks", "UUID="+ch.UUID)
+				}
 				msg := fmt.Sprintf("Mapping %s partition to an encrypted partition", ch.Name)
 				prg = progress.NewLoop(msg)
 				log.Info(msg)
-				if err = ch.MapEncrypted(); err != nil {
+				if err = ch.MapEncrypted(model.CryptPass); err != nil {
 					return err
 				}
 				prg.Success()
+				crypttab = append(crypttab, strings.Join(ctab, " "))
+				fstab = append(fstab, strings.Join(ftab, " "))
 			}
 
 			msg := fmt.Sprintf("Writing %s file system to %s", ch.FsType, ch.Name)
@@ -285,6 +308,22 @@ func Install(rootDir string, model *model.SystemInstall, options args.Args) erro
 
 	if encryptedUsed {
 		model.AddBundle(storage.RequiredBundle)
+
+		if len(crypttab) > 0 {
+			crypttabFile := filepath.Join(rootDir, "etc", "crypttab")
+			lines := strings.Join(crypttab, "\n")
+
+			if err = ioutil.WriteFile(crypttabFile, []byte(lines), 0644); err != nil {
+				log.Error("Failed to write crypttab: %v", err)
+			}
+
+			fstabFile := filepath.Join(rootDir, "etc", "fstab")
+			lines = strings.Join(fstab, "\n")
+
+			if err = ioutil.WriteFile(fstabFile, []byte(lines), 0644); err != nil {
+				log.Error("Failed to write fstab: %v", err)
+			}
+		}
 	}
 
 	if model.KernelArguments != nil && len(model.KernelArguments.Add) > 0 {

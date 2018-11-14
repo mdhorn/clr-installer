@@ -12,6 +12,7 @@ import (
 	"path"
 	"reflect"
 	"regexp"
+	"strings"
 	"syscall"
 
 	"github.com/clearlinux/clr-installer/args"
@@ -169,6 +170,15 @@ func main() {
 	log.Debug("Loading config file: %s", cf)
 	if md, err = model.LoadFile(cf, options); err != nil {
 		fatal(err)
+	}
+
+	if options.CryptPassFile != "" {
+		content, err := ioutil.ReadFile(options.CryptPassFile)
+		if err != nil {
+			log.Warning("Could not read --crypt-file: %v", err)
+		} else {
+			md.CryptPass = strings.TrimSpace(string(content))
+		}
 	}
 
 	if options.RebootSet {
