@@ -245,3 +245,9 @@ func TestHasIPv4Addr(t *testing.T) {
 		t.Fatalf("Interface has no ipv4 but HasIPv4Addr() returned true")
 	}
 }
+
+func TestWirelessIfaces(t *testing.T) {
+	if isWireless("foobar") {
+		t.Fatalf("Interface 'foobar' probably should not exist, and certainly is not wireless")
+	}
+}

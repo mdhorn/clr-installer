@@ -206,6 +206,11 @@ func Interfaces() ([]*Interface, error) {
 			continue
 		}
 
+		if isWireless(curr.Name) {
+			log.Info("Ignoring wireless interface '%s'", curr.Name)
+			continue
+		}
+
 		iface := &Interface{Name: curr.Name, Addrs: []*Addr{}}
 		result = append(result, iface)
 
@@ -277,6 +282,42 @@ func netMaskToCIDR(mask string) (num int, err error) {
 	}
 
 	return bits, nil
+}
+
+func isWireless(ifName string) bool {
+	// Attempt to prove this interface is wireless
+	wireless := false
+
+	const (
+		networkPath = "/sys/class/net/"
+	)
+
+	ifPath := filepath.Join(networkPath, ifName)
+	if _, err := os.Stat(ifPath); os.IsNotExist(err) {
+		return wireless
+	}
+
+	wirelessPath := filepath.Join(ifPath, "wireless")
+	fileInfo, err := os.Stat(wirelessPath)
+	if os.IsNotExist(err) {
+		return wireless
+	}
+
+	if fileInfo.Mode().IsDir() {
+		wireless = true
+	} else {
+		phyPath := filepath.Join(ifPath, "phy80211")
+		fileInfo, err := os.Stat(phyPath)
+		if os.IsNotExist(err) {
+			return wireless
+		}
+
+		if fileInfo.Mode() == os.ModeSymlink {
+			wireless = true
+		}
+	}
+
+	return wireless
 }
 
 func (i *Interface) applyStatic(root string, file *os.File) error {

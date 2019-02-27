@@ -13,6 +13,10 @@ import (
 	"github.com/VladimirMarkelov/clui"
 )
 
+const (
+	noUsableInterfaces = "No usable wired interfaces detected!"
+)
+
 // NetworkPage is the Page implementation for the network configuration page
 type NetworkPage struct {
 	BasePage
@@ -32,6 +36,10 @@ func (page *NetworkPage) GetConfiguredValue() string {
 		if err != nil {
 			return "Could not load network interfaces"
 		}
+	}
+
+	if len(ifaces) == 0 {
+		return noUsableInterfaces
 	}
 
 	res := []string{}
@@ -122,6 +130,10 @@ func (page *NetworkPage) Activate() {
 
 	for _, curr := range page.interfaces {
 		page.showInterface(page.frm, curr)
+	}
+
+	if len(page.interfaces) < 1 {
+		page.showLabel(page.frm, noUsableInterfaces)
 	}
 }
 
