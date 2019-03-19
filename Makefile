@@ -1,4 +1,4 @@
-# Copyright 2018 Intel Corporation
+# Copyright 2019 Intel Corporation
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
@@ -166,7 +166,7 @@ check: gopath
 	SHACMD='ls -art --ignore="." /tmp | sha512sum'; \
 	BEFORELS=`eval $$LSCMD`; \
 	BEFORESHA=`eval $$SHACMD`; \
-	go test -cover ${GO_PACKAGE_PREFIX}/...; \
+	go test ${CHECK_VERBOSE} -cover ${GO_PACKAGE_PREFIX}/...; \
 	AFTERSHA=`eval $$SHACMD`; \
 	AFTERLS=`eval $$LSCMD`; \
 	if [ "$$BEFORESHA" != "$$AFTERSHA" ] ; then \
