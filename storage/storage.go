@@ -28,6 +28,7 @@ type BlockDevice struct {
 	MappedName      string           // mapped device name
 	Model           string           // device model
 	MajorMinor      string           // major:minor device number
+	PtType          string           // partition table type
 	FsType          string           // filesystem type
 	UUID            string           // filesystem uuid
 	Serial          string           // device serial number
@@ -900,6 +901,15 @@ func (bd *BlockDevice) UnmarshalJSON(b []byte) error {
 			}
 
 			bd.Size = size
+		case "pttype":
+			var pttype string
+
+			pttype, err = getNextStrToken(dec, "pttype")
+			if err != nil {
+				return err
+			}
+
+			bd.PtType = pttype
 		case "fstype":
 			var fstype string
 

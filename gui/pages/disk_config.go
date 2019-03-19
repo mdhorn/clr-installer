@@ -1,4 +1,4 @@
-// Copyright © 2018-2019 Intel Corporation
+// Copyright © 2019 Intel Corporation
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
@@ -6,20 +6,31 @@ package pages
 
 import (
 	"fmt"
+
+	"github.com/gotk3/gotk3/glib"
+	"github.com/gotk3/gotk3/gtk"
+
+	"github.com/clearlinux/clr-installer/log"
 	"github.com/clearlinux/clr-installer/model"
 	"github.com/clearlinux/clr-installer/storage"
-	"github.com/gotk3/gotk3/gtk"
 )
 
 // DiskConfig is a simple page to help with DiskConfig settings
 type DiskConfig struct {
-	devs       []*storage.BlockDevice
-	activeDisk *storage.BlockDevice
-	controller Controller
-	model      *model.SystemInstall
-	box        *gtk.Box
-	scroll     *gtk.ScrolledWindow
-	list       *gtk.ListBox
+	devs              []*storage.BlockDevice
+	activeDisk        *storage.BlockDevice
+	controller        Controller
+	model             *model.SystemInstall
+	box               *gtk.Box
+	scroll            *gtk.ScrolledWindow
+	scrollBox         *gtk.Box
+	safeButton        *gtk.RadioButton
+	destructiveButton *gtk.RadioButton
+	gpartedButton     *gtk.RadioButton
+	bonusButton       *gtk.RadioButton
+	fubarButton       *gtk.RadioButton
+	safeCombo         *gtk.ComboBox
+	destructiveCombo  *gtk.ComboBox
 }
 
 // NewDiskConfigPage returns a new DiskConfigPage
@@ -28,13 +39,7 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 		controller: controller,
 		model:      model,
 	}
-	var placeholder *gtk.Label
-
-	devs, err := disk.buildDisks()
-	if err != nil {
-		return nil, err
-	}
-	disk.devs = devs
+	var err error
 
 	disk.box, err = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
@@ -42,7 +47,7 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 	}
 	disk.box.SetBorderWidth(8)
 
-	// Build storage for listbox
+	// Build storage for scrollBox
 	disk.scroll, err = gtk.ScrolledWindowNew(nil, nil)
 	if err != nil {
 		return nil, err
@@ -50,76 +55,192 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 	disk.box.PackStart(disk.scroll, true, true, 0)
 	disk.scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
-	// Build listbox
-	disk.list, err = gtk.ListBoxNew()
-	if err != nil {
-		return nil, err
-	}
-	disk.list.SetSelectionMode(gtk.SELECTION_SINGLE)
-	disk.list.SetActivateOnSingleClick(true)
-	if _, err := disk.list.Connect("row-activated", disk.onRowActivated); err != nil {
-		return nil, err
-	}
-	disk.scroll.Add(disk.list)
-	// Remove background
-	st, _ := disk.list.GetStyleContext()
-	st.AddClass("scroller-special")
-
-	// Set placeholder
-	placeholder, err = gtk.LabelNew("No usable devices found")
+	// Build scrollBox
+	disk.scrollBox, err = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 20)
 	if err != nil {
 		return nil, err
 	}
 
-	placeholder.ShowAll()
-	disk.list.SetPlaceholder(placeholder)
+	/*
+		if _, err := disk.list.Connect("row-activated", disk.onRowActivated); err != nil {
+			return nil, err
+		}
+	*/
+	disk.scroll.Add(disk.scrollBox)
 
-	if err = disk.buildList(); err != nil {
+	// Build the Safe Install Section
+	disk.safeButton, err = gtk.RadioButtonNewFromWidget(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	safeBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	if err != nil {
+		return nil, err
+	}
+	safeBox.PackStart(disk.safeButton, false, false, 10)
+
+	safeHortzBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 10)
+	safeBox.PackStart(safeHortzBox, true, true, 0)
+	text := fmt.Sprintf("<big>Safe Installation</big>\n")
+	text = text + "Install on available media without the loss of data"
+	safeLabel, err := gtk.LabelNew(text)
+	if err != nil {
+		return nil, err
+	}
+	safeLabel.SetXAlign(0.0)
+	safeLabel.SetHAlign(gtk.ALIGN_START)
+	safeLabel.SetUseMarkup(true)
+	safeHortzBox.PackStart(safeLabel, false, false, 0)
+
+	log.Debug("Before making ComboBox")
+	disk.safeCombo, err = gtk.ComboBoxNew()
+	if err != nil {
+		log.Warning("Failed to make disk.safeCombo")
+		return nil, err
+	}
+
+	safeBox.PackStart(disk.safeCombo, true, true, 0)
+
+	log.Debug("Before safeBox ShowAll")
+	safeBox.ShowAll()
+	disk.scrollBox.Add(safeBox)
+
+	// Build the Destructive Install Section
+	log.Debug("Before disk.destructiveButton")
+	disk.destructiveButton, err = gtk.RadioButtonNewFromWidget(disk.safeButton)
+	if err != nil {
+		return nil, err
+	}
+
+	destructiveBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	if err != nil {
+		return nil, err
+	}
+	destructiveBox.PackStart(disk.destructiveButton, false, false, 10)
+
+	destructiveHortzBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 10)
+	destructiveBox.PackStart(destructiveHortzBox, true, true, 0)
+	text = fmt.Sprintf("<big><b><span foreground=\"red\">Destructive Installation</span></b></big>\n")
+	text = text + "Install on available media wiping all data from media!!"
+	destructiveLabel, err := gtk.LabelNew(text)
+	if err != nil {
+		return nil, err
+	}
+	destructiveLabel.SetXAlign(0.0)
+	destructiveLabel.SetHAlign(gtk.ALIGN_START)
+	destructiveLabel.SetUseMarkup(true)
+	destructiveHortzBox.PackStart(destructiveLabel, false, false, 0)
+
+	log.Debug("Before making ComboBox")
+	disk.destructiveCombo, err = gtk.ComboBoxNew()
+	if err != nil {
+		log.Warning("Failed to make disk.destructiveCombo")
+		return nil, err
+	}
+
+	destructiveBox.PackStart(disk.destructiveCombo, true, true, 0)
+
+	destructiveBox.ShowAll()
+	disk.scrollBox.Add(destructiveBox)
+
+	separator, err := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	if err != nil {
+		return nil, err
+	}
+	separator.ShowAll()
+	disk.scrollBox.Add(separator)
+
+	// Build the Gparted Section
+	disk.gpartedButton, err = gtk.RadioButtonNewFromWidget(disk.destructiveButton)
+	if err != nil {
+		return nil, err
+	}
+
+	gpartedBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	if err != nil {
+		return nil, err
+	}
+	gpartedBox.PackStart(disk.gpartedButton, false, false, 10)
+
+	gpartedHortzBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 10)
+	gpartedBox.PackStart(gpartedHortzBox, true, true, 0)
+	text = fmt.Sprintf("<big>Manual Update Disk</big>\n")
+	text = text + "Modify disk to be usable for installation.\n"
+	text = text + "We need at least <b>20GB</b> of space.\n"
+	gpartedLabel, err := gtk.LabelNew(text)
+	if err != nil {
+		return nil, err
+	}
+	gpartedLabel.SetXAlign(0.0)
+	gpartedLabel.SetHAlign(gtk.ALIGN_START)
+	gpartedLabel.SetUseMarkup(true)
+	gpartedHortzBox.PackStart(gpartedLabel, false, false, 0)
+
+	gpartedBox.ShowAll()
+	disk.scrollBox.Add(gpartedBox)
+
+	if err = disk.buildButtonSections(); err != nil {
 		return nil, err
 	}
 
 	return disk, nil
 }
 
-func (disk *DiskConfig) buildDisks() ([]*storage.BlockDevice, error) {
-	//return storage.RescanBlockDevices(disk.model.TargetMedias)
+// buildButtonSections populates the scrollBox with usable widget things
+func (disk *DiskConfig) buildButtonSections() error {
 	devices, err := storage.RescanBlockDevices(nil)
+	if err != nil {
+		return err
+	}
+
+	installTargets := storage.FindInstallTargets(storage.MinimumInstallSize, devices)
+
+	safeStore, err := gtk.ListStoreNew(glib.TYPE_STRING)
+	if err != nil {
+		log.Warning("ListStoreNew failed")
+		return err
+	}
+	destructiveStore, err := gtk.ListStoreNew(glib.TYPE_STRING)
+	if err != nil {
+		log.Warning("ListStoreNew failed")
+		return err
+	}
+
 	for _, device := range devices {
-		storage.NewStandardPartitions(device)
+		found := false
+		for _, target := range installTargets {
+			if device.Name == target.Name {
+				found = true
+				log.Debug("Adding safe install target %s", target.Name)
+				err := safeStore.SetValue(safeStore.Append(), 0, target.Name)
+				if err != nil {
+					log.Warning("SetValue safeStore")
+					return err
+				}
+				break
+			}
+		}
+		if !found {
+			log.Debug("Adding destructive install target %s", device.Name)
+			err := destructiveStore.SetValue(destructiveStore.Append(), 0, device.Name)
+			if err != nil {
+				log.Warning("SetValue safeStore")
+				return err
+			}
+		}
 	}
-	return devices, err
-}
 
-// buildList populates the ListBox with usable widget things
-func (disk *DiskConfig) buildList() error {
-	for _, device := range disk.devs {
-		box, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-		if err != nil {
-			return err
-		}
-		img, err := gtk.ImageNewFromIconName("drive-harddisk-system-symbolic", gtk.ICON_SIZE_DIALOG)
-		if err != nil {
-			return err
-		}
-		img.SetMarginEnd(12)
-		img.SetMarginStart(12)
-		box.PackStart(img, false, false, 0)
-		text := fmt.Sprintf("<big>Wipe all data on: <b>%s</b></big>\n", device.GetDeviceFile())
-		for _, child := range device.Children {
-			text += fmt.Sprintf(" • Create partition <b>%s</b> with type <b>%s</b> (%s)\n", child.GetDeviceFile(), child.FsType, child.Label)
-		}
+	disk.safeCombo.SetModel(safeStore)
+	cellRenderer, _ := gtk.CellRendererTextNew()
+	disk.safeCombo.PackStart(cellRenderer, true)
+	disk.safeCombo.AddAttribute(cellRenderer, "text", 0)
 
-		label, err := gtk.LabelNew(text)
-		if err != nil {
-			return err
-		}
-		label.SetXAlign(0.0)
-		label.SetHAlign(gtk.ALIGN_START)
-		label.SetUseMarkup(true)
-		box.PackStart(label, false, false, 0)
-		box.ShowAll()
-		disk.list.Add(box)
-	}
+	disk.destructiveCombo.SetModel(destructiveStore)
+	cellRenderer2, _ := gtk.CellRendererTextNew()
+	disk.destructiveCombo.PackStart(cellRenderer2, true)
+	disk.destructiveCombo.AddAttribute(cellRenderer2, "text", 0)
+
 	return nil
 }
 
@@ -132,7 +253,8 @@ func (disk *DiskConfig) onRowActivated(box *gtk.ListBox, row *gtk.ListBoxRow) {
 	}
 	disk.controller.SetButtonState(ButtonConfirm, true)
 	idx := row.GetIndex()
-	disk.activeDisk = disk.devs[idx]
+	log.Debug("We just selected row %d", idx)
+	//disk.activeDisk = disk.devs[idx]
 }
 
 // IsRequired will return true as we always need a DiskConfig
@@ -152,7 +274,7 @@ func (disk *DiskConfig) GetID() int {
 
 // GetIcon returns the icon for this page
 func (disk *DiskConfig) GetIcon() string {
-	return "media-removable"
+	return "drive-harddisk-system"
 }
 
 // GetRootWidget returns the root embeddable widget for this page
@@ -189,10 +311,7 @@ func (disk *DiskConfig) ResetChanges() {
 	}
 
 	// Select row in the box, activate it and scroll to it
-	row := disk.list.GetRowAtIndex(0)
-	disk.list.SelectRow(row)
-	scrollToView(disk.scroll, disk.list, &row.Widget)
-	disk.onRowActivated(disk.list, row)
+	disk.safeButton.SetActive(true)
 }
 
 // GetConfiguredValue returns our current config

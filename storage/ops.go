@@ -1,4 +1,4 @@
-// Copyright © 2018 Intel Corporation
+// Copyright © 2019 Intel Corporation
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -328,6 +329,84 @@ func (bd *BlockDevice) WritePartitionTable(legacyBios bool) error {
 	prg.Success()
 
 	return nil
+}
+
+func (bd *BlockDevice) getPartitionTable() *bytes.Buffer {
+	partTable := bytes.NewBuffer(nil)
+	devFile := bd.GetDeviceFile()
+
+	if !utils.IntSliceContains([]int{BlockDeviceTypeDisk, BlockDeviceTypeLoop}, int(bd.Type)) {
+		log.Warning("getPartitionTable() called on non-disk %q", devFile)
+		return partTable
+	}
+
+	// Read the partition table for the device
+	err := cmd.Run(partTable,
+		"parted",
+		"--machine",
+		"--script",
+		//"--align=optimal",
+		"--",
+		devFile,
+		"unit",
+		"B",
+		"print",
+		"free",
+	)
+	if err != nil {
+		log.Warning("getPartitionTable() had an error reading partition table %q",
+			fmt.Sprintf("%s", partTable.String()))
+		empty := bytes.NewBuffer(nil)
+		return empty
+	}
+
+	return partTable
+}
+
+func largestContiguousFreeSpace(partTable *bytes.Buffer, minSize uint64) (uint64, uint64) {
+	var start, end, size uint64
+	size = minSize - 1
+
+	for _, line := range strings.Split(partTable.String(), ";\n") {
+		log.Debug("largestContiguousFreeSpace() line is %q", line)
+
+		fields := strings.Split(line, ":")
+		if len(fields) == 5 && fields[4] == "free" {
+			lineSize, err := strconv.ParseUint(strings.TrimRight(fields[3], "B"), 10, 64)
+			if err == nil {
+				if lineSize > size {
+					lineStart, errStart := strconv.ParseUint(strings.TrimRight(fields[1], "B"), 10, 64)
+					lineEnd, errEnd := strconv.ParseUint(strings.TrimRight(fields[2], "B"), 10, 64)
+					if errStart == nil && errEnd == nil {
+						start = lineStart
+						end = lineEnd
+					}
+				}
+			}
+		}
+	}
+
+	return start, end
+}
+
+// LargestContiguousFreeSpace returns the largest, contiguous block of free
+// space in the partition table for the block device.
+// If none found, returns {0, 0}
+func (bd *BlockDevice) LargestContiguousFreeSpace(minSize uint64) (uint64, uint64) {
+	var start, end uint64
+	devFile := bd.GetDeviceFile()
+
+	if !utils.IntSliceContains([]int{BlockDeviceTypeDisk, BlockDeviceTypeLoop}, int(bd.Type)) {
+		log.Warning("LargestContiguousFreeSpace() called on non-disk %q", devFile)
+		return start, end
+	}
+
+	// Read the partition table for the device
+	partTable := bd.getPartitionTable()
+
+	start, end = largestContiguousFreeSpace(partTable, minSize)
+
+	return start, end
 }
 
 // MountMetaFs mounts proc, sysfs and devfs in the target installation directory
@@ -656,4 +735,79 @@ func GenerateTabFiles(rootDir string, medias []*BlockDevice) error {
 	}
 
 	return nil
+}
+
+// InstallTarget describes a BlockDevice which is a valid installation target
+type InstallTarget struct {
+	Name      string // block device name
+	WholeDisk bool   // Can we use the whole disk?
+	Removable bool   // Is this removable/hotswap media?
+	FreeStart uint64 // Starting position of free space
+	FreeEnd   uint64 // Ending position of free space
+}
+
+const (
+	// MinimumInstallSize is the smallest installation size in bytes
+	MinimumInstallSize = 21474836480
+)
+
+// FindInstallTargets creates an order list of possible installation targets
+func FindInstallTargets(minSize uint64, medias []*BlockDevice) []InstallTarget {
+	var installTargets []InstallTarget
+
+	for _, curr := range medias {
+		if curr.PtType != "gpt" {
+			log.Debug("FindInstallTargets(): ignoring disk %s with partition table type %s",
+				curr.Name, curr.PtType)
+			continue
+		}
+
+		if curr.Children != nil && len(curr.Children) > 125 {
+			log.Debug("FindInstallTargets(): ignoring disk %s with too many partitions (%d)",
+				curr.Name, len(curr.Children))
+			continue
+		}
+
+		if curr.Children == nil || len(curr.Children) == 0 {
+			installTargets = append(installTargets,
+				InstallTarget{Name: curr.Name, WholeDisk: true, Removable: curr.RemovableDevice})
+			log.Debug("FindInstallTargets(): found whole disk %s", curr.Name)
+			continue
+		}
+
+		if start, end := curr.LargestContiguousFreeSpace(minSize); start != 0 && end != 0 {
+			installTargets = append(installTargets,
+				InstallTarget{Name: curr.Name, Removable: curr.RemovableDevice, FreeStart: start, FreeEnd: end})
+			log.Debug("FindInstallTargets(): Room on disk %s: %d to %d", curr.Name, start, end)
+			continue
+		}
+	}
+
+	sort.Slice(installTargets, func(i, j int) bool {
+		// Ordering is:
+		// -- Unformatted disk
+		// -- Disk with GPT Partition with adequate free space
+		// -- Unformatted disk - removable
+		// -- Disk with GPT Partition with adequate free space -- removable
+
+		if !installTargets[i].Removable && installTargets[j].Removable {
+			return true
+		}
+		if installTargets[i].Removable && !installTargets[j].Removable {
+			return false
+		}
+
+		if installTargets[i].WholeDisk && !installTargets[j].WholeDisk {
+			return true
+		}
+		if installTargets[i].WholeDisk && installTargets[j].WholeDisk {
+			return false
+		}
+
+		iSize := installTargets[i].FreeEnd - installTargets[i].FreeStart
+		jSize := installTargets[j].FreeEnd - installTargets[j].FreeStart
+		return iSize >= jSize
+	})
+
+	return installTargets
 }
