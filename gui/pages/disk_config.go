@@ -18,6 +18,7 @@ import (
 // DiskConfig is a simple page to help with DiskConfig settings
 type DiskConfig struct {
 	devs              []*storage.BlockDevice
+	installTargets    []storage.InstallTarget
 	activeDisk        *storage.BlockDevice
 	controller        Controller
 	model             *model.SystemInstall
@@ -26,9 +27,11 @@ type DiskConfig struct {
 	scrollBox         *gtk.Box
 	safeButton        *gtk.RadioButton
 	destructiveButton *gtk.RadioButton
+	errorMessage      *gtk.Label
+	rescanButton      *gtk.RadioButton
 	gpartedButton     *gtk.RadioButton
-	bonusButton       *gtk.RadioButton
-	fubarButton       *gtk.RadioButton
+	safeStore         *gtk.ListStore
+	destructiveStore  *gtk.ListStore
 	safeCombo         *gtk.ComboBox
 	destructiveCombo  *gtk.ComboBox
 }
@@ -61,11 +64,6 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 		return nil, err
 	}
 
-	/*
-		if _, err := disk.list.Connect("row-activated", disk.onRowActivated); err != nil {
-			return nil, err
-		}
-	*/
 	disk.scroll.Add(disk.scrollBox)
 
 	// Build the Safe Install Section
@@ -79,6 +77,10 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 		return nil, err
 	}
 	safeBox.PackStart(disk.safeButton, false, false, 10)
+	disk.safeButton.Connect("toggled", func() {
+		// Enable/Disable the Combo Choose Box based on the radio button
+		disk.safeCombo.SetSensitive(disk.safeButton.GetActive())
+	})
 
 	safeHortzBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 10)
 	safeBox.PackStart(safeHortzBox, true, true, 0)
@@ -118,6 +120,10 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 		return nil, err
 	}
 	destructiveBox.PackStart(disk.destructiveButton, false, false, 10)
+	disk.destructiveButton.Connect("toggled", func() {
+		// Enable/Disable the Combo Choose Box based on the radio button
+		disk.destructiveCombo.SetSensitive(disk.destructiveButton.GetActive())
+	})
 
 	destructiveHortzBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 10)
 	destructiveBox.PackStart(destructiveHortzBox, true, true, 0)
@@ -151,8 +157,46 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 	separator.ShowAll()
 	disk.scrollBox.Add(separator)
 
+	// Error Message Label
+	disk.errorMessage, err = gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	disk.errorMessage.SetXAlign(0.0)
+	disk.errorMessage.SetHAlign(gtk.ALIGN_START)
+	disk.errorMessage.SetUseMarkup(true)
+	disk.scrollBox.Add(disk.errorMessage)
+
+	// Build the Rescan Section
+	disk.rescanButton, err = gtk.RadioButtonNewFromWidget(disk.destructiveButton)
+	if err != nil {
+		return nil, err
+	}
+
+	rescanBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	if err != nil {
+		return nil, err
+	}
+	rescanBox.PackStart(disk.rescanButton, false, false, 10)
+
+	rescanHortzBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 10)
+	rescanBox.PackStart(rescanHortzBox, true, true, 0)
+	text = fmt.Sprintf("<big>Rescan Media</big>\n")
+	text = text + "Rescan for changes to hot swappable media."
+	rescanLabel, err := gtk.LabelNew(text)
+	if err != nil {
+		return nil, err
+	}
+	rescanLabel.SetXAlign(0.0)
+	rescanLabel.SetHAlign(gtk.ALIGN_START)
+	rescanLabel.SetUseMarkup(true)
+	rescanHortzBox.PackStart(rescanLabel, false, false, 0)
+
+	rescanBox.ShowAll()
+	disk.scrollBox.Add(rescanBox)
+
 	// Build the Gparted Section
-	disk.gpartedButton, err = gtk.RadioButtonNewFromWidget(disk.destructiveButton)
+	disk.gpartedButton, err = gtk.RadioButtonNewFromWidget(disk.rescanButton)
 	if err != nil {
 		return nil, err
 	}
@@ -180,22 +224,27 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 	gpartedBox.ShowAll()
 	disk.scrollBox.Add(gpartedBox)
 
-	if err = disk.buildButtonSections(); err != nil {
-		return nil, err
-	}
+	disk.box.ShowAll()
 
 	return disk, nil
 }
 
-// buildButtonSections populates the scrollBox with usable widget things
-func (disk *DiskConfig) buildButtonSections() error {
-	devices, err := storage.RescanBlockDevices(nil)
+// This is time intensive, mitigate calls
+func (disk *DiskConfig) scanMediaDevices() error {
+	var err error
+
+	disk.devs, err = storage.RescanBlockDevices(nil)
 	if err != nil {
 		return err
 	}
 
-	installTargets := storage.FindInstallTargets(storage.MinimumInstallSize, devices)
+	disk.installTargets = storage.FindInstallTargets(storage.MinimumInstallSize, disk.devs)
 
+	return nil
+}
+
+// populateComboBoxes populates the scrollBox with usable widget things
+func (disk *DiskConfig) populateComboBoxes() error {
 	safeStore, err := gtk.ListStoreNew(glib.TYPE_STRING)
 	if err != nil {
 		log.Warning("ListStoreNew failed")
@@ -207,9 +256,20 @@ func (disk *DiskConfig) buildButtonSections() error {
 		return err
 	}
 
-	for _, device := range devices {
+	safeFound := false
+	destructiveFound := false
+
+	if len(disk.devs) < 1 {
+		warning := "No media found for installation"
+		log.Warning(warning)
+		warning = fmt.Sprintf("<big><b><span foreground=\"red\">Warning: %s</span></b></big>", warning)
+		disk.errorMessage.SetMarkup(warning)
+		return nil
+	}
+
+	for _, device := range disk.devs {
 		found := false
-		for _, target := range installTargets {
+		for _, target := range disk.installTargets {
 			if device.Name == target.Name {
 				found = true
 				log.Debug("Adding safe install target %s", target.Name)
@@ -218,6 +278,7 @@ func (disk *DiskConfig) buildButtonSections() error {
 					log.Warning("SetValue safeStore")
 					return err
 				}
+				safeFound = true
 				break
 			}
 		}
@@ -225,9 +286,10 @@ func (disk *DiskConfig) buildButtonSections() error {
 			log.Debug("Adding destructive install target %s", device.Name)
 			err := destructiveStore.SetValue(destructiveStore.Append(), 0, device.Name)
 			if err != nil {
-				log.Warning("SetValue safeStore")
+				log.Warning("SetValue destructiveStore")
 				return err
 			}
+			destructiveFound = true
 		}
 	}
 
@@ -235,11 +297,28 @@ func (disk *DiskConfig) buildButtonSections() error {
 	cellRenderer, _ := gtk.CellRendererTextNew()
 	disk.safeCombo.PackStart(cellRenderer, true)
 	disk.safeCombo.AddAttribute(cellRenderer, "text", 0)
+	if safeFound {
+		disk.safeCombo.SetActive(0)
+	}
 
 	disk.destructiveCombo.SetModel(destructiveStore)
 	cellRenderer2, _ := gtk.CellRendererTextNew()
 	disk.destructiveCombo.PackStart(cellRenderer2, true)
 	disk.destructiveCombo.AddAttribute(cellRenderer2, "text", 0)
+	if destructiveFound {
+		disk.destructiveCombo.SetActive(0)
+	}
+
+	if _, err := disk.box.Connect("show", func() {
+		log.Debug("We triggered a visibility-notify-event")
+		/*
+			if err := disk.populateComboBoxes(); err != nil {
+				log.Warning("Problem building Button Section for disk selection")
+			}
+		*/
+	}); err != nil {
+		return nil
+	}
 
 	return nil
 }
@@ -301,7 +380,25 @@ func (disk *DiskConfig) StoreChanges() {
 // ResetChanges will reset this page to match the model
 func (disk *DiskConfig) ResetChanges() {
 	disk.activeDisk = nil
-	disk.controller.SetButtonState(ButtonConfirm, false)
+	disk.controller.SetButtonState(ButtonConfirm, true)
+
+	disk.safeCombo.SetSensitive(false)
+	disk.destructiveCombo.SetSensitive(false)
+
+	if err := disk.populateComboBoxes(); err != nil {
+		log.Warning("Problem populating possible disk selections")
+	}
+
+	// Choose the most appropriate button
+	if len(disk.installTargets) > 0 {
+		disk.safeButton.SetActive(true)
+		disk.safeCombo.SetSensitive(true)
+	} else if len(disk.devs) > 0 {
+		disk.destructiveButton.SetActive(true)
+		disk.destructiveCombo.SetSensitive(true)
+	} else {
+		disk.rescanButton.SetActive(true)
+	}
 
 	// TODO: Match list to target medias. But we have an ugly
 	// list of root target medias and you can only select one
@@ -309,9 +406,6 @@ func (disk *DiskConfig) ResetChanges() {
 	if disk.model.TargetMedias == nil {
 		return
 	}
-
-	// Select row in the box, activate it and scroll to it
-	disk.safeButton.SetActive(true)
 }
 
 // GetConfiguredValue returns our current config
