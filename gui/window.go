@@ -1,4 +1,4 @@
-// Copyright © 2018-2019 Intel Corporation
+// Copyright © 2019 Intel Corporation
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
@@ -90,6 +90,9 @@ func NewWindow(model *model.SystemInstall, rootDir string, options args.Args) (*
 		options: options,
 	}
 	window.menu.screens = make(map[bool]*ContentView)
+
+	// Default Icon the application
+	gtk.WindowSetDefaultIconName("system-software-install")
 
 	// Construct main window
 	window.handle, err = gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
