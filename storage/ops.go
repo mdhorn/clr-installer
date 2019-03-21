@@ -740,6 +740,7 @@ func GenerateTabFiles(rootDir string, medias []*BlockDevice) error {
 // InstallTarget describes a BlockDevice which is a valid installation target
 type InstallTarget struct {
 	Name      string // block device name
+	Friendly  string // user friendly device name
 	WholeDisk bool   // Can we use the whole disk?
 	Removable bool   // Is this removable/hotswap media?
 	FreeStart uint64 // Starting position of free space
@@ -770,14 +771,16 @@ func FindInstallTargets(minSize uint64, medias []*BlockDevice) []InstallTarget {
 
 		if curr.Children == nil || len(curr.Children) == 0 {
 			installTargets = append(installTargets,
-				InstallTarget{Name: curr.Name, WholeDisk: true, Removable: curr.RemovableDevice})
+				InstallTarget{Name: curr.Name, Friendly: curr.Model,
+					WholeDisk: true, Removable: curr.RemovableDevice})
 			log.Debug("FindInstallTargets(): found whole disk %s", curr.Name)
 			continue
 		}
 
 		if start, end := curr.LargestContiguousFreeSpace(minSize); start != 0 && end != 0 {
 			installTargets = append(installTargets,
-				InstallTarget{Name: curr.Name, Removable: curr.RemovableDevice, FreeStart: start, FreeEnd: end})
+				InstallTarget{Name: curr.Name, Friendly: curr.Model,
+					Removable: curr.RemovableDevice, FreeStart: start, FreeEnd: end})
 			log.Debug("FindInstallTargets(): Room on disk %s: %d to %d", curr.Name, start, end)
 			continue
 		}
