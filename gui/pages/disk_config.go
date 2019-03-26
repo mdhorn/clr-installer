@@ -29,8 +29,6 @@ type DiskConfig struct {
 	safeButton        *gtk.RadioButton
 	destructiveButton *gtk.RadioButton
 	chooserCombo      *gtk.ComboBox
-	safeStore         *gtk.ListStore
-	destructiveStore  *gtk.ListStore
 	errorMessage      *gtk.Label
 	rescanButton      *gtk.Button
 	gpartedButton     *gtk.Button
@@ -197,13 +195,24 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 		return nil, err
 	}
 
+	// Add the renderers to the ComboBox
+	mediaRenderer, _ := gtk.CellRendererPixbufNew()
+	disk.chooserCombo.PackStart(mediaRenderer, true)
+	disk.chooserCombo.AddAttribute(mediaRenderer, "pixbuf", 0)
+
+	nameRenderer, _ := gtk.CellRendererTextNew()
+	disk.chooserCombo.PackStart(nameRenderer, true)
+	disk.chooserCombo.AddAttribute(nameRenderer, "text", 1)
+
+	sizeRenderer, _ := gtk.CellRendererTextNew()
+	disk.chooserCombo.PackStart(sizeRenderer, true)
+	disk.chooserCombo.AddAttribute(sizeRenderer, "text", 2)
+
 	disk.mediaGrid.Attach(disk.chooserCombo, 1, 0, 1, 2)
 
 	disk.mediaGrid.SetRowSpacing(10)
 	disk.mediaGrid.SetColumnSpacing(10)
 	disk.mediaGrid.SetColumnHomogeneous(true)
-	//disk.mediaGrid.SetHExpand(true)
-	//disk.mediaGrid.SetVExpand(true)
 	disk.scrollBox.Add(disk.mediaGrid)
 
 	separator, err := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
@@ -230,7 +239,9 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 	if _, err = disk.rescanButton.Connect("clicked", func() {
 		log.Debug("rescan")
 		_ = disk.scanMediaDevices()
-
+		if err := disk.populateComboBoxes(); err != nil {
+			log.Warning("Problem populating possible disk selections")
+		}
 	}); err != nil {
 		return nil, err
 	}
@@ -315,21 +326,14 @@ func (disk *DiskConfig) scanMediaDevices() error {
 
 // populateComboBoxes populates the scrollBox with usable widget things
 func (disk *DiskConfig) populateComboBoxes() error {
-	var err error
 	isSafe := true
 
-	if disk.safeStore != nil {
-		disk.safeStore.Clear()
-	}
-	disk.safeStore, err = newListStoreMedia()
+	safeStore, err := newListStoreMedia()
 	if err != nil {
 		log.Warning("ListStoreNew safeStore failed")
 		return err
 	}
-	if disk.destructiveStore != nil {
-		disk.destructiveStore.Clear()
-	}
-	disk.destructiveStore, err = newListStoreMedia()
+	destructiveStore, err := newListStoreMedia()
 	if err != nil {
 		log.Warning("ListStoreNew destructiveStore failed")
 		return err
@@ -352,7 +356,7 @@ func (disk *DiskConfig) populateComboBoxes() error {
 			if device.Name == target.Name {
 				found = true
 				log.Debug("Adding safe install target %s", target.Name)
-				err := addListStoreMediaRow(disk.safeStore, target)
+				err := addListStoreMediaRow(safeStore, target)
 				if err != nil {
 					log.Warning("SetValue safeStore")
 					return err
@@ -365,7 +369,7 @@ func (disk *DiskConfig) populateComboBoxes() error {
 			target := storage.InstallTarget{Name: device.Name, Friendly: device.Model,
 				WholeDisk: true, Removable: device.RemovableDevice}
 			log.Debug("Adding destructive install target %s", target.Name)
-			err := addListStoreMediaRow(disk.destructiveStore, target)
+			err := addListStoreMediaRow(destructiveStore, target)
 			if err != nil {
 				log.Warning("SetValue destructiveStore")
 				return err
@@ -375,28 +379,16 @@ func (disk *DiskConfig) populateComboBoxes() error {
 	}
 
 	if isSafe {
-		disk.chooserCombo.SetModel(disk.safeStore)
+		disk.chooserCombo.SetModel(safeStore)
 		if safeFound {
 			disk.chooserCombo.SetActive(0)
 		}
 	} else {
-		disk.chooserCombo.SetModel(disk.destructiveStore)
+		disk.chooserCombo.SetModel(destructiveStore)
 		if destructiveFound {
 			disk.chooserCombo.SetActive(0)
 		}
 	}
-
-	mediaRenderer, _ := gtk.CellRendererPixbufNew()
-	disk.chooserCombo.PackStart(mediaRenderer, true)
-	disk.chooserCombo.AddAttribute(mediaRenderer, "pixbuf", 0)
-
-	nameRenderer, _ := gtk.CellRendererTextNew()
-	disk.chooserCombo.PackStart(nameRenderer, true)
-	disk.chooserCombo.AddAttribute(nameRenderer, "text", 1)
-
-	sizeRenderer, _ := gtk.CellRendererTextNew()
-	disk.chooserCombo.PackStart(sizeRenderer, true)
-	disk.chooserCombo.AddAttribute(sizeRenderer, "text", 2)
 
 	return nil
 }
