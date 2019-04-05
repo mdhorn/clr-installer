@@ -318,11 +318,6 @@ func (bd *BlockDevice) WritePartitionTable(legacyBios bool) error {
 		}
 	}
 
-	if err = bd.PartProbe(); err != nil {
-		prg.Failure()
-		return err
-	}
-
 	time.Sleep(time.Duration(4) * time.Second)
 
 	prg.Success()

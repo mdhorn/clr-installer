@@ -518,12 +518,6 @@ func listBlockDevices(userDefined []*BlockDevice) ([]*BlockDevice, error) {
 		return nil, err
 	}
 
-	for _, bd := range bds {
-		if err = bd.PartProbe(); err != nil {
-			return nil, err
-		}
-	}
-
 	if userDefined == nil || len(userDefined) == 0 {
 		return bds, nil
 	}
@@ -1167,20 +1161,6 @@ func NewStandardPartitions(disk *BlockDevice) {
 		MountPoint: "/",
 		Label:      "root",
 	})
-}
-
-// PartProbe runs partprobe against the block device's file
-func (bd *BlockDevice) PartProbe() error {
-	args := []string{
-		"partprobe",
-		bd.GetDeviceFile(),
-	}
-
-	if err := cmd.RunAndLog(args...); err != nil {
-		return errors.Wrap(err)
-	}
-
-	return nil
 }
 
 // DiskSize given a BlockDevice sum's up its size and children sizes
