@@ -97,6 +97,9 @@ func (m Message) Process(line string) {
 				description = "Downloading missing files"
 			case "add_missing_files":
 				description = "Installing base OS and configured bundles"
+			default:
+				log.Warning("Unknown StepDescription in line %q: %v", m.StepDescription, line)
+				description = "Swupd working"
 			}
 
 			// update the progress bar with the correct description
