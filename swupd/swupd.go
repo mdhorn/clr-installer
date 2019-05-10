@@ -51,14 +51,14 @@ type Bundle struct {
 
 // Message represents data parsed from a JSON message sent by a swupd command
 type Message struct {
-        Type            string `json:"type"`
-        Msg             string `json:"msg"`
-        Section         string `json:"section"`
-        Status          int    `json:"status"`
-        CurrentStep     int    `json:"currentStep"`
-        TotalSteps      int    `json:"totalSteps"`
-        StepCompletion  int    `json:"stepCompletion"`
-        StepDescription string `json:"stepDescription"`
+	Type            string `json:"type"`
+	Msg             string `json:"msg"`
+	Section         string `json:"section"`
+	Status          int    `json:"status"`
+	CurrentStep     int    `json:"currentStep"`
+	TotalSteps      int    `json:"totalSteps"`
+	StepCompletion  int    `json:"stepCompletion"`
+	StepDescription string `json:"stepDescription"`
 }
 
 // Process parses the output received and process it according to its type
