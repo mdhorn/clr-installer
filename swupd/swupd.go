@@ -73,7 +73,10 @@ func (m Message) Process(line string) {
 	if line != "[" && line != "]" {
 		// also remove the "," ath the end of the string if exist
 		trimmedMsg := strings.TrimSuffix(line, ",")
-		json.Unmarshal([]byte(trimmedMsg), &m)
+		if err := json.Unmarshal([]byte(trimmedMsg), &m); err != nil {
+			log.Warning("Failed to parse swupd response %q: %v", line, err)
+			return
+		}
 
 		if m.Type == "progress" {
 			// "pretty" descriptions for steps
