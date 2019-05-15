@@ -36,5 +36,5 @@ language: en_US.UTF-8
 kernel: kernel-gce
 
 post-install: [
-   {cmd: "scripts/gce-image-google-sudoers-setup.sh ${chrootDir}"}
+   {cmd: "${yamlDir}/gce-image-google-sudoers-setup.sh ${chrootDir}"}
 ]

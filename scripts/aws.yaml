@@ -35,5 +35,5 @@ language: en_US.UTF-8
 kernel: kernel-aws
 
 post-install: [
-   {cmd: "scripts/aws-disable-root.sh ${chrootDir}"}
+   {cmd: "${yamlDir}/aws-disable-root.sh ${chrootDir}"}
 ]

@@ -40,5 +40,5 @@ language: en_US.UTF-8
 kernel: kernel-native
 
 post-install: [
-   {cmd: "scripts/live-image-post-update-version.py ${chrootDir}"}
+   {cmd: "${yamlDir}/live-image-post-update-version.py ${chrootDir}"}
 ]

@@ -44,5 +44,5 @@ language: en_US.UTF-8
 kernel: none
 
 post-install: [
-   {cmd: "scripts/service-os-post.sh ${chrootDir}"}
+   {cmd: "${yamlDir}/service-os-post.sh ${chrootDir}"}
 ]

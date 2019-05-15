@@ -1,17 +1,38 @@
 #!/bin/bash
 
+# c-basic-offset: 4; tab-width: 4; indent-tabs-mode: t
+# vi: set shiftwidth=4 tabstop=4 noexpandtab:
+# :indentSize=4:tabSize=4:noTabs=false:
+
+# Desktop Post Install steps
+
+set -ex
+
 CHROOTPATH=$1
+export HOOKDIR=$(dirname $0)
 
 # Force Telemetry to use local host server
-scripts/local-telemetry-post.sh ${CHROOTPATH}
+${HOOKDIR}/local-telemetry-post.sh ${CHROOTPATH}
 
 # Delay booting to give user a change to change boot params
-scripts/wait-to-boot-post.sh ${CHROOTPATH}
+${HOOKDIR}/wait-to-boot-post.sh ${CHROOTPATH}
 
 # Add issue (pre-login message) to inform user of how to run the installer
-scripts/add-login-issue.sh ${CHROOTPATH}
+${HOOKDIR}/add-login-issue.sh ${CHROOTPATH}
 
 # Add changes to PS1 to indicate live image by setting the hostname
 echo "clr-live" > ${CHROOTPATH}/etc/hostname
 
 exit 0
+
+# Editor modelines  -  https://www.wireshark.org/tools/modelines.html
+#
+# Local variables:
+# c-basic-offset: 4
+# tab-width: 4
+# indent-tabs-mode: t
+# End:
+#
+# vi: set shiftwidth=4 tabstop=4 noexpandtab:
+# :indentSize=4:tabSize=4:noTabs=false:
+#

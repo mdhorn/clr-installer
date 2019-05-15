@@ -36,5 +36,5 @@ language: en_US.UTF-8
 kernel: kernel-hyperv-mini
 
 post-install: [
-   {cmd: "scripts/hyperv-mini-post.sh ${chrootDir}"}
+   {cmd: "${yamlDir}/hyperv-mini-post.sh ${chrootDir}"}
 ]

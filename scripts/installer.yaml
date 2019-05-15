@@ -44,5 +44,5 @@ kernel-arguments: {
 }
 
 post-install: [
-   {cmd: "scripts/installer-post.sh ${chrootDir}"},
+   {cmd: "${yamlDir}/installer-post.sh ${chrootDir}"},
 ]
