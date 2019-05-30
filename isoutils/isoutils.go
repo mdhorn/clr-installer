@@ -148,6 +148,11 @@ func mkInitrdInitScript(templatePath string) error {
 		"/kernel/drivers/cdrom/cdrom.ko",
 		"/kernel/drivers/scsi/sr_mod.ko",
 		"/kernel/fs/overlayfs/overlay.ko",
+		"/kernel/drivers/input/serio/i8042.ko",
+		"/kernel/drivers/input/serio/libps2.ko",
+		"/kernel/drivers/input/keyboard/atkbd.ko",
+		"/kernel/drivers/hid/hid-logitech-dj.ko",
+		"/kernel/drivers/hid/hid-logitech-hidpp.ko",
 	}
 
 	/* Find kernel, then break the name into kernelVersion */
