@@ -19,6 +19,7 @@ import (
 	"github.com/clearlinux/clr-installer/log"
 	"github.com/clearlinux/clr-installer/model"
 	"github.com/clearlinux/clr-installer/storage"
+	"github.com/clearlinux/clr-installer/syscheck"
 	"github.com/clearlinux/clr-installer/utils"
 )
 
@@ -65,6 +66,9 @@ type DiskConfig struct {
 	saveButton   *gtk.RadioButton
 	saveSelected map[string]storage.InstallTarget
 	saveMedias   []*storage.BlockDevice
+
+	// hasAES Does the hardware support AES?
+	hasAES bool
 }
 
 func (disk *DiskConfig) advancedButtonToggled() {
@@ -84,7 +88,7 @@ func (disk *DiskConfig) advancedButtonToggled() {
 		}
 	}
 
-	disk.encryptCheck.SetSensitive(storage.AdvancedPartitionsRequireEncryption(disk.model.TargetMedias))
+	disk.setEncryptCheckSensitive(storage.AdvancedPartitionsRequireEncryption(disk.model.TargetMedias))
 	disk.encryptCheck.SetActive(false) // Force off for Advance as not support yet
 
 	results := storage.DesktopValidateAdvancedPartitions(disk.model.TargetMedias)
@@ -117,6 +121,8 @@ func NewDiskConfigPage(controller Controller, model *model.SystemInstall) (Page,
 		model:      model,
 	}
 	var err error
+
+	disk.hasAES = syscheck.HasAES()
 
 	// Page Box
 	disk.box, err = setBox(gtk.ORIENTATION_VERTICAL, 0, "box-page-new")
@@ -753,7 +759,7 @@ func (disk *DiskConfig) populateComboBoxes() error {
 	disk.errorMessage.SetMarkup("")
 	disk.advancedMessage.SetMarkup("")
 	disk.chooserCombo.SetSensitive(false)
-	disk.encryptCheck.SetSensitive(true)
+	disk.setEncryptCheckSensitive(true)
 	disk.controller.SetButtonState(ButtonConfirm, true)
 
 	safeStore, err := newListStoreMedia()
@@ -1086,10 +1092,10 @@ func (disk *DiskConfig) refreshPage() {
 		}
 		if !advEncryption {
 			disk.encryptCheck.SetActive(false)
-			disk.encryptCheck.SetSensitive(false)
+			disk.setEncryptCheckSensitive(false)
 		} else {
 			if disk.model.CryptPass == "" {
-				disk.encryptCheck.SetActive(true)
+				disk.setEncryptCheckSensitive(true)
 			}
 		}
 		disk.advancedButtonToggled()
@@ -1236,4 +1242,8 @@ func (disk *DiskConfig) runDiskPartitionTool() {
 // warningDialogResponse handles the response from the dialog message
 func (disk *DiskConfig) warningDialogResponse(msgDialog *gtk.Dialog, responseType gtk.ResponseType) {
 	msgDialog.Destroy()
+}
+
+func (disk *DiskConfig) setEncryptCheckSensitive(state bool) {
+	disk.encryptCheck.SetSensitive(state && disk.hasAES)
 }

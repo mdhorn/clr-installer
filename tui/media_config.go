@@ -16,6 +16,7 @@ import (
 
 	"github.com/clearlinux/clr-installer/log"
 	"github.com/clearlinux/clr-installer/storage"
+	"github.com/clearlinux/clr-installer/syscheck"
 	"github.com/clearlinux/clr-installer/utils"
 )
 
@@ -59,6 +60,11 @@ type MediaConfigPage struct {
 	activeDisk   *storage.BlockDevice
 	activeSerial string
 }
+
+var (
+	// Does the hardware support AES?
+	hasAES bool
+)
 
 // GetConfiguredValue Returns the string representation of currently value set
 func (page *MediaConfigPage) GetConfiguredValue() string {
@@ -219,7 +225,7 @@ func (page *MediaConfigPage) Activate() {
 	page.saveMedias = append([]*storage.BlockDevice{}, si.TargetMedias...)
 
 	page.confirmBtn.SetEnabled(false)
-	page.encryptCheck.SetEnabled(true)
+	page.setEncryptCheckEnabled(true)
 
 	if len(page.safeTargets) == 0 && len(page.destructiveTargets) == 0 {
 		if err := page.buildMediaLists(); err != nil {
@@ -239,7 +245,7 @@ func (page *MediaConfigPage) Activate() {
 		page.activated = page.advancedRadio
 		page.saveRadio = page.advancedRadio
 		if !advEncryption {
-			page.encryptCheck.SetEnabled(false)
+			page.setEncryptCheckEnabled(false)
 		}
 	} else {
 		page.activated = page.cancelBtn
@@ -278,6 +284,10 @@ func (page *MediaConfigPage) DeActivate() {
 	}
 }
 
+func (page *MediaConfigPage) setEncryptCheckEnabled(state bool) {
+	page.encryptCheck.SetEnabled(state && hasAES)
+}
+
 func (page *MediaConfigPage) setConfirmButton() {
 	if page.labelWarning.BackColor() == errorLabelBg &&
 		page.labelWarning.TextColor() == errorLabelFg {
@@ -300,7 +310,7 @@ func (page *MediaConfigPage) safeRadioOnChange(active bool) {
 	page.labelDestructive.SetTitle("")
 	page.isDestructiveSelected = false
 	page.isAdvancedSelected = false
-	page.encryptCheck.SetEnabled(true)
+	page.setEncryptCheckEnabled(true)
 	page.advancedCfgBtn.SetEnabled(false)
 
 	// Disable the Confirm Button if we toggled
@@ -328,7 +338,7 @@ func (page *MediaConfigPage) destructiveRadioOnChange(active bool) {
 	page.labelDestructive.SetTitle("")
 	page.isSafeSelected = false
 	page.isAdvancedSelected = false
-	page.encryptCheck.SetEnabled(true)
+	page.setEncryptCheckEnabled(true)
 	page.advancedCfgBtn.SetEnabled(false)
 
 	// Disable the Confirm Button if we toggled
@@ -359,7 +369,7 @@ func (page *MediaConfigPage) advancedRadioOnChange(active bool) {
 	page.isSafeSelected = false
 	page.isDestructiveSelected = false
 
-	page.encryptCheck.SetEnabled(storage.AdvancedPartitionsRequireEncryption(page.getModel().TargetMedias))
+	page.setEncryptCheckEnabled(storage.AdvancedPartitionsRequireEncryption(page.getModel().TargetMedias))
 	page.encryptCheck.SetState(0) // Force off for Advance as not support yet
 
 	page.advancedCfgBtn.SetEnabled(true)
@@ -468,6 +478,8 @@ func newMediaConfigPage(tui *Tui) (Page, error) {
 	page.chooserList.SetStyle("List")
 	page.listBackColor = page.chooserList.BackColor()
 	page.listTextColor = page.chooserList.TextColor()
+
+	hasAES = syscheck.HasAES()
 
 	page.chooserList.OnActive(func(active bool) {
 		if active {

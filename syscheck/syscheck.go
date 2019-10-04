@@ -16,7 +16,7 @@ import (
 )
 
 func getCPUFeature(feature string) error {
-	fName := "/proc/cpuinfo"
+	fName := "/tmp/cpuinfo"
 	cpuInfo, err := ioutil.ReadFile(fName)
 	if err != nil {
 		log.Error("Unable to read %s", fName)
@@ -35,6 +35,15 @@ func getEFIExist() error {
 	}
 
 	return nil
+}
+
+// HasAES checks AES CPU support
+func HasAES() bool {
+	if err := getCPUFeature("aes"); err == nil {
+		return true
+	}
+
+	return false
 }
 
 // RunSystemCheck checks compatibility for clear linux. (e.g. EFI firmware, CPU featureset)
