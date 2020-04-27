@@ -154,20 +154,20 @@ func (bd *BlockDevice) updatePartitionInfo() error {
 //   + mount point
 //   + file system type (i.e swap)
 //   + or if it's the "special" efi case
-func (bd *BlockDevice) getGUID() (string, error) {
+func (bd *BlockDevice) getGUID() string {
 	if guid, ok := guidMap[bd.MountPoint]; ok {
-		return guid, nil
+		return guid
 	}
 
 	if guid, ok := guidMap[bd.FsType]; ok {
-		return guid, nil
+		return guid
 	}
 
 	if bd.FsType == "vfat" && bd.MountPoint == "/boot" {
-		return guidMap["efi"], nil
+		return guidMap["efi"]
 	}
 
-	return "none", errors.Errorf("Could not determine the guid for: %s", bd.Name)
+	return ""
 }
 
 func (bd *BlockDevice) isStandardMount() bool {
@@ -519,9 +519,10 @@ func (bd *BlockDevice) WritePartitionTable(wholeDisk bool, dryRun *[]string) err
 		// and we know their assigned numbers ...
 		for _, curr := range bd.Children {
 			var guid string
-			guid, err = curr.getGUID()
-			if err != nil {
-				log.Warning("%s", err)
+			guid = curr.getGUID()
+			if guid == "" {
+				log.Warning("Could not determine the guid for: %s", curr.Name)
+				continue
 			}
 
 			if curr.FsType != "swap" || curr.Type != BlockDeviceTypeCrypt {
