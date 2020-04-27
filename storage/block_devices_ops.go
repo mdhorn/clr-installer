@@ -462,7 +462,7 @@ func partitionUsingParted(bd *BlockDevice, dryRun *[]string, wholeDisk bool) err
 
 // WritePartitionTable writes the defined partitions to the actual block device
 func (bd *BlockDevice) WritePartitionTable(wholeDisk bool, dryRun *[]string) error {
-	if bd.Type != BlockDeviceTypeDisk && bd.Type != BlockDeviceTypeLoop &&
+	if bd.Type != BlockDeviceTypeDisk && bd.Type != BlockDeviceTypeLoop && bd.Type != BlockDeviceTypeLVM2Volume &&
 		bd.Type != BlockDeviceTypeRAID0 && bd.Type != BlockDeviceTypeRAID1 && bd.Type != BlockDeviceTypeRAID4 &&
 		bd.Type != BlockDeviceTypeRAID5 && bd.Type != BlockDeviceTypeRAID6 && bd.Type != BlockDeviceTypeRAID10 {
 		return errors.Errorf("Type is partition, disk required")
@@ -622,7 +622,8 @@ func (bd *BlockDevice) getPartitionList() []*PartedPartition {
 	partTable := bytes.NewBuffer(nil)
 	devFile := bd.GetDeviceFile()
 
-	if !utils.IntSliceContains([]int{BlockDeviceTypeDisk, BlockDeviceTypeLoop}, int(bd.Type)) {
+	if !utils.IntSliceContains([]int{BlockDeviceTypeDisk, BlockDeviceTypeLoop, BlockDeviceTypeLVM2Volume},
+		int(bd.Type)) {
 		log.Warning("getPartitionList() called on non-disk %q", devFile)
 		return partitionList
 	}
