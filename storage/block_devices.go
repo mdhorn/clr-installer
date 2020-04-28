@@ -110,6 +110,9 @@ const (
 	// BlockDeviceStateConnected identifies a BlockDevice as Connected
 	BlockDeviceStateConnected
 
+	// BlockDeviceStateSuspended identifies a BlockDevice as Suspended
+	BlockDeviceStateSuspended
+
 	// MinimumPartitionSize is smallest size for any partition
 	MinimumPartitionSize = 1048576
 
@@ -174,6 +177,7 @@ var (
 		BlockDeviceStateRunning:   "running",
 		BlockDeviceStateLive:      "live",
 		BlockDeviceStateConnected: "Connected",
+		BlockDeviceStateSuspended: "suspended",
 		BlockDeviceStateUnknown:   "",
 	}
 	blockDeviceTypeMap = map[BlockDeviceType]string{
